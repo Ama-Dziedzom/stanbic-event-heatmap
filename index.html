@@ -10,6 +10,14 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css">
 </head>
@@ -17,16 +25,78 @@
 <body>
     <div id="map"></div>
 
-    <!-- Event Details Drawer -->
-    <div id="event-drawer" class="drawer">
-        <div class="drawer-handle"></div>
-        <button id="close-drawer" aria-label="Close details">&times;</button>
-        <div class="drawer-content">
-            <h2 id="event-title">Event Title</h2>
-            <p id="event-desc">Event description goes here.</p>
-            <div class="event-meta">
-                <span id="event-price" class="price">GHS 0.00</span>
-                <button id="buy-ticket-btn" class="btn-primary">Buy Ticket</button>
+    <!-- Event Details Drawer (Shadcn Sheet Style) -->
+    <div id="event-drawer" class="sheet">
+        <div class="sheet-overlay" id="sheet-overlay"></div>
+        <div class="sheet-content">
+            <button id="close-drawer" class="sheet-close">
+                <i data-lucide="x"></i>
+                <span class="sr-only">Close</span>
+            </button>
+
+            <div class="sheet-header">
+                <h2 id="event-title" class="sheet-title">Event Title</h2>
+                <p id="event-desc" class="sheet-description">Event description goes here.</p>
+            </div>
+
+            <div class="sheet-body">
+                <!-- Key Details Grid -->
+                <div class="details-grid">
+                    <div class="detail-card">
+                        <i data-lucide="calendar" class="detail-icon"></i>
+                        <div>
+                            <span class="detail-label">Date</span>
+                            <span id="event-date" class="detail-value">TBD</span>
+                        </div>
+                    </div>
+                    <div class="detail-card">
+                        <i data-lucide="clock" class="detail-icon"></i>
+                        <div>
+                            <span class="detail-label">Time</span>
+                            <span id="event-time" class="detail-value">TBD</span>
+                        </div>
+                    </div>
+                    <div class="detail-card full-width">
+                        <i data-lucide="map-pin" class="detail-icon"></i>
+                        <div>
+                            <span class="detail-label">Location</span>
+                            <span id="event-location" class="detail-value">TBD</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gallery -->
+                <div class="section">
+                    <h3 class="section-heading">
+                        <i data-lucide="image" class="section-icon"></i>
+                        Highlights
+                    </h3>
+                    <div class="image-gallery" id="event-gallery">
+                        <!-- JS injected -->
+                    </div>
+                </div>
+
+                <!-- Expectations -->
+                <div class="section">
+                    <h3 class="section-heading">
+                        <i data-lucide="sparkles" class="section-icon"></i>
+                        What to Expect
+                    </h3>
+                    <ul class="expectation-list" id="event-expectations">
+                        <!-- JS injected -->
+                    </ul>
+                </div>
+            </div>
+
+            <div class="sheet-footer">
+                <div class="price-tag">
+                    <span class="currency">GHS</span>
+                    <span id="event-price">0.00</span>
+                </div>
+                <button id="buy-ticket-btn" class="btn-primary">
+                    Get Tickets
+                    <i data-lucide="arrow-right" class="btn-icon-right"></i>
+                </button>
             </div>
         </div>
     </div>
