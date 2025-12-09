@@ -193,38 +193,65 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Interaction Logic ---
 
-    const drawer = document.getElementById('event-drawer');
-    const closeBtn = document.getElementById('close-drawer');
+    // --- Interaction Logic ---
 
-    // Elements to update
-    const eventTitle = document.getElementById('event-title');
-    const eventDesc = document.getElementById('event-desc');
-    const eventPrice = document.getElementById('event-price');
-    const eventDate = document.getElementById('event-date');
-    const eventTime = document.getElementById('event-time');
-    const eventLocation = document.getElementById('event-location');
-    const eventGallery = document.getElementById('event-gallery');
-    const eventExpectationsList = document.getElementById('event-expectations');
+    // Function to create HTML content for the popup
+    function createPopupContent(point) {
+        // Attendees (mock logic for visual stacking)
+        const attendeeImages = [
+            'https://i.pravatar.cc/150?img=1',
+            'https://i.pravatar.cc/150?img=2',
+            'https://i.pravatar.cc/150?img=3'
+        ];
 
-    // Helper functions
-    function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
-        const R = 6371; // Radius of the earth in km
-        const dLat = deg2rad(lat2 - lat1);
-        const dLon = deg2rad(lon2 - lon1);
-        const a =
-            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-            Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
-    }
+        // Random "joined" count
+        const joinCount = Math.floor(Math.random() * 20) + 5;
 
-    function deg2rad(deg) {
-        return deg * (Math.PI / 180);
-    }
+        return `
+            <div class="popup-card">
+                <img src="${point.images[0]}" alt="${point.title}" class="popup-header-image">
+                <div class="popup-content">
+                    <div class="popup-top-section">
+                        <h3 class="popup-title">${point.title}</h3>
+                    </div>
 
-    function closeDrawer() {
-        drawer.classList.remove('open');
+                    <div class="popup-desc-section">
+                        <span class="popup-desc-label">Description</span>
+                        <p class="popup-desc-text">
+                            ${point.desc}
+                            ${point.expectations.length > 0 ? ' ' + point.expectations[0] : ''}
+                            <a href="#" class="read-more">...Read more</a>
+                        </p>
+                    </div>
+
+                    <div class="popup-info-rows">
+                        <div class="info-row">
+                            <div class="info-icon-circle">
+                                <i data-lucide="map-pin" class="info-icon"></i>
+                            </div>
+                            <div class="info-text">
+                                <span class="info-subtext">${point.location.split(',').pop().trim()}</span>
+                                <span class="info-maintext">${point.location.split(',')[0]}</span>
+                            </div>
+                        </div>
+
+                        <div class="info-row">
+                            <div class="info-icon-circle">
+                                <i data-lucide="calendar" class="info-icon"></i>
+                            </div>
+                            <div class="info-text">
+                                <span class="info-subtext">${point.date}, 2025</span>
+                                <span class="info-maintext">${point.time}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="popup-action-btn">
+                        Buy Ticket GHS ${point.price}
+                    </button>
+                </div>
+            </div>
+        `;
     }
 
     map.on('click', function (e) {
@@ -242,51 +269,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Threshold: ~1km for easy clicking on mock data
         if (closestPoint && minDistance < 1.0) {
-            // Update Drawer Content
-            eventTitle.textContent = closestPoint.title;
-            eventDesc.textContent = closestPoint.desc;
-            eventPrice.textContent = closestPoint.price;
-            eventDate.textContent = closestPoint.date;
-            eventTime.textContent = closestPoint.time;
-            eventLocation.textContent = closestPoint.location;
 
-            // Update Image Gallery
-            eventGallery.innerHTML = '';
-            closestPoint.images.forEach(imgSrc => {
-                const img = document.createElement('img');
-                img.src = imgSrc;
-                img.alt = `${closestPoint.title} photo`;
-                img.className = 'gallery-image';
-                eventGallery.appendChild(img);
-            });
+            const popupContent = createPopupContent(closestPoint);
 
-            // Update Expectations
-            eventExpectationsList.innerHTML = '';
-            closestPoint.expectations.forEach(expectation => {
-                const li = document.createElement('li');
-                // Insert Check icon for each item
-                li.innerHTML = `<i data-lucide="check" class="expectation-icon"></i> <span>${expectation}</span>`;
-                eventExpectationsList.appendChild(li);
-            });
+            L.popup({
+                offset: [170, 250], // Shift right (half width + gap) and down (half height approx)
+                className: 'custom-popup',
+                maxWidth: 320,
+                minWidth: 320,
+                closeButton: true,
+                autoPan: true,
+                autoPanPadding: [50, 50]
+            })
+                .setLatLng([closestPoint.lat, closestPoint.lng])
+                .setContent(popupContent)
+                .openOn(map);
 
-            // Re-run Lucide to render new icons
-            lucide.createIcons();
+            // Re-initialize icons inside the popup
+            setTimeout(() => {
+                lucide.createIcons();
+            }, 50);
 
-            // Open Drawer
-            drawer.classList.add('open');
-        } else {
-            // Close drawer if clicking empty space
-            closeDrawer();
         }
     });
 
-    closeBtn.addEventListener('click', closeDrawer);
+    // Helper functions
+    function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+        const R = 6371; // Radius of the earth in km
+        const dLat = deg2rad(lat2 - lat1);
+        const dLon = deg2rad(lon2 - lon1);
+        const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
 
-    // Also close when clicking overlay (if we had one separate, but here we can check target)
-    // Optional: Close on Escape key
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeDrawer();
-    });
+    function deg2rad(deg) {
+        return deg * (Math.PI / 180);
+    }
 
     // Expose for debugging
     window.map = map;
