@@ -314,3 +314,39 @@ html {
     white-space: nowrap;
     border-width: 0;
 }
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    .leaflet-popup-content-wrapper {
+        border-radius: 1rem;
+    }
+
+    .leaflet-popup-content {
+        width: 85vw !important;
+        /* Take up most of screen width */
+        max-width: 350px !important;
+        margin: 0 auto !important;
+    }
+
+    .popup-card {
+        border-radius: 1rem;
+    }
+
+    .popup-header-image {
+        height: 150px;
+        /* Slightly shorter image */
+    }
+
+    .popup-title {
+        font-size: 1.1rem;
+    }
+
+    /* Ensure close button is tappable but not obstructing */
+    .leaflet-container a.leaflet-popup-close-button {
+        width: 30px;
+        height: 30px;
+        font-size: 20px;
+        top: 8px;
+        right: 8px;
+    }
+}

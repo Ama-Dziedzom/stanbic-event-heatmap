@@ -272,11 +272,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const popupContent = createPopupContent(closestPoint);
 
+            // Responsive Offset Logic
+            const isMobile = window.innerWidth < 768;
+            const popupOffset = isMobile ? [0, 10] : [170, 250];
+            const popupMaxWidth = isMobile ? 300 : 320; // Slightly smaller max width default for mobile
+
             L.popup({
-                offset: [170, 250], // Shift right (half width + gap) and down (half height approx)
+                offset: popupOffset,
                 className: 'custom-popup',
-                maxWidth: 320,
-                minWidth: 320,
+                maxWidth: popupMaxWidth, // Let CSS control max-width mainly, but this sets a ceiling
+                minWidth: isMobile ? 280 : 320,
                 closeButton: true,
                 autoPan: true,
                 autoPanPadding: [50, 50]
