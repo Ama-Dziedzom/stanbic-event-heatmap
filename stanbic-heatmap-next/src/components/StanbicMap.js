@@ -1,11 +1,6 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import L from 'leaflet';
-import 'leaflet.heat';
-// OSMBuildings is not an NPM package compatible with import in the same way, 
-// usually it's loaded via script tag. We will handle this in useEffect or layout.
-// However, there is no official React wrapper. We'll try to use a dynamic import or checking window.
 
 // Mock Data Utilities
 const eventTitles = [
@@ -104,70 +99,118 @@ export default function StanbicMap() {
 
     useEffect(() => {
         if (!mapRef.current) return;
-        // Check if map is already initialized
         if (mapInstance.current) return;
 
-        // Expose Leaflet globally for OSMBuildings compatibility
-        if (typeof window !== 'undefined') {
-            window.L = L;
-        }
+        let map;
 
-        // Initialize Map
-        const map = L.map(mapRef.current, {
-            zoomControl: false,
-            preferCanvas: true, // Improves performance for vector layers
-            zoomAnimation: true,
-            markerZoomAnimation: true,
-            fadeAnimation: true
-        }).setView([5.6037, -0.1870], 13);
-
-        mapInstance.current = map;
-
-        // Tile Layer
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap &copy; CARTO',
-            maxZoom: 20
-        }).addTo(map);
-
-        // --- Mock Data ---
-        const centerLat = 5.6037;
-        const centerLng = -0.1870;
-        const osuEvents = generateMockPoints(40, 0.04, centerLat, centerLng);
-        const airportEvents = generateMockPoints(30, 0.03, centerLat, centerLng);
-        const eastLegonEvents = generateMockPoints(30, 0.05, centerLat, centerLng);
-
-        const shiftedAirport = airportEvents.map(p => ({ ...p, lat: p.lat + 0.04, lng: p.lng - 0.01 }));
-        const shiftedLegon = eastLegonEvents.map(p => ({ ...p, lat: p.lat + 0.06, lng: p.lng + 0.03 }));
-
-        const allPoints = [...osuEvents, ...shiftedAirport, ...shiftedLegon];
-        const heatPoints = allPoints.map(p => [p.lat, p.lng, p.intensity]);
-
-        // Heatmap
-        L.heatLayer(heatPoints, {
-            radius: 35,
-            blur: 25,
-            maxZoom: 15,
-            max: 1.0,
-            gradient: {
-                0.4: '#d1e5f0',
-                0.6: '#67a9cf',
-                0.7: '#2166ac',
-                0.9: '#053061'
+        const initMap = async () => {
+            // Wait for container to have dimensions
+            if (!mapRef.current || mapRef.current.offsetHeight === 0 || mapRef.current.offsetWidth === 0) {
+                setTimeout(initMap, 200);
+                return;
             }
-        }).addTo(map);
 
-        // --- 3D Buildings (OSMBuildings) ---
-        const initOSMBuildings = () => {
-            // Ensure global L is available again just in case
-            if (!window.L) window.L = L;
+            // Dynamic imports to avoid SSR issues and window error
+            const L = (await import('leaflet')).default;
+            // Ensure L is global BEFORE importing plugins that depend on it
+            if (typeof window !== 'undefined') window.L = L;
+            await import('leaflet.heat');
 
-            if (window.OSMBuildings && mapInstance.current) {
-                const map = mapInstance.current;
+            // Check again after async import
+            if (mapInstance.current) return;
 
-                // Safety check for container availability and dimensions
+            // Initialize Map
+            map = L.map(mapRef.current, {
+                zoomControl: false,
+                preferCanvas: false, // SVG is more stable for initial load
+                zoomAnimation: true,
+                markerZoomAnimation: true,
+                fadeAnimation: true
+            }).setView([5.6037, -0.1870], 13);
+
+            mapInstance.current = map;
+
+            // Tile Layer
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap &copy; CARTO',
+                maxZoom: 20
+            }).addTo(map);
+
+            setupLayers(L, map);
+        };
+
+        const setupLayers = (L, map) => {
+            // --- Mock Data ---
+            const centerLat = 5.6037;
+            const centerLng = -0.1870;
+            const osuEvents = generateMockPoints(40, 0.04, centerLat, centerLng);
+            const airportEvents = generateMockPoints(30, 0.03, centerLat, centerLng);
+            const eastLegonEvents = generateMockPoints(30, 0.05, centerLat, centerLng);
+
+            const shiftedAirport = airportEvents.map(p => ({ ...p, lat: p.lat + 0.04, lng: p.lng - 0.01 }));
+            const shiftedLegon = eastLegonEvents.map(p => ({ ...p, lat: p.lat + 0.06, lng: p.lng + 0.03 }));
+
+            const allPoints = [...osuEvents, ...shiftedAirport, ...shiftedLegon];
+            const heatPoints = allPoints.map(p => [p.lat, p.lng, p.intensity]);
+
+            // Function to initialize layers ensuring map has size
+            const initLayers = () => {
+                if (!mapInstance.current || mapInstance.current !== map) return;
+
+                const size = map.getSize();
                 const container = map.getContainer();
-                if (!container || container.offsetHeight === 0) {
-                    // Retrying if container is not ready
+
+                // Double check dimensions
+                if (size.x <= 0 || size.y <= 0 || !container || container.offsetWidth <= 0 || container.offsetHeight <= 0) {
+                    map.invalidateSize();
+                    setTimeout(initLayers, 200);
+                    return;
+                }
+
+                // Heatmap - Wrapped in try/catch to prevent app crash
+                try {
+                    L.heatLayer(heatPoints, {
+                        radius: 35,
+                        blur: 25,
+                        maxZoom: 15,
+                        max: 1.0,
+                        gradient: {
+                            0.4: '#d1e5f0',
+                            0.6: '#67a9cf',
+                            0.7: '#2166ac',
+                            0.9: '#053061'
+                        }
+                    }).addTo(map);
+                } catch (err) {
+                    console.warn("[StanbicMap] Heatmap init error:", err);
+                }
+
+                // Trigger OSMBuildings init
+                if (window.OSMBuildings) {
+                    initOSMBuildings();
+                } else {
+                    const checkOsm = setInterval(() => {
+                        if (!mapInstance.current || mapInstance.current !== map) {
+                            clearInterval(checkOsm);
+                            return;
+                        }
+                        if (window.OSMBuildings) {
+                            initOSMBuildings();
+                            clearInterval(checkOsm);
+                        }
+                    }, 500);
+                    setTimeout(() => clearInterval(checkOsm), 10000);
+                }
+            };
+
+            // --- 3D Buildings (OSMBuildings) ---
+            const initOSMBuildings = () => {
+                if (!window.L) window.L = L;
+                if (!mapInstance.current || mapInstance.current !== map) return;
+                if (!window.OSMBuildings) return;
+
+                const container = map.getContainer();
+                if (!container || container.offsetHeight <= 0 || container.offsetWidth <= 0) {
                     setTimeout(initOSMBuildings, 200);
                     return;
                 }
@@ -204,126 +247,101 @@ export default function StanbicMap() {
                     };
                     osmb.addGeoJSON(legoLandmarks);
                 } catch (e) {
-                    console.warn("OSMBuildings init warning (retrying):", e);
-                    // If it failed cleanly, maybe retry one more time? or just log.
+                    console.warn("OSMBuildings initialization warning:", e);
                 }
-            }
-        };
+            };
 
-        // Try initializing or wait for script load
-        if (window.OSMBuildings) {
-            setTimeout(initOSMBuildings, 500); // 500ms delay for safety
-        } else {
-            const checkOsm = setInterval(() => {
-                if (window.OSMBuildings) {
-                    setTimeout(initOSMBuildings, 200);
-                    clearInterval(checkOsm);
-                }
-            }, 500);
-            setTimeout(() => clearInterval(checkOsm), 10000);
-        }
+            initLayers();
 
-        // --- Interaction Logic (Mobile Responsive) ---
-        map.on('click', (e) => {
-            let closestPoint = null;
-            let minDistance = Infinity;
+            // --- Interaction Logic ---
+            map.on('click', (e) => {
+                let closestPoint = null;
+                let minDistance = Infinity;
 
-            allPoints.forEach(point => {
-                const dist = getDistanceFromLatLonInKm(e.latlng.lat, e.latlng.lng, point.lat, point.lng);
-                if (dist < minDistance) {
-                    minDistance = dist;
-                    closestPoint = point;
+                allPoints.forEach(point => {
+                    const dist = getDistanceFromLatLonInKm(e.latlng.lat, e.latlng.lng, point.lat, point.lng);
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        closestPoint = point;
+                    }
+                });
+
+                if (closestPoint && minDistance < 1.0) {
+                    const mapPinIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="info-icon"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`;
+                    const calendarIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="info-icon"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>`;
+
+                    const popupContent = `
+                        <div class="popup-card">
+                            <img src="${closestPoint.images[0]}" alt="${closestPoint.title}" class="popup-header-image">
+                            <div class="popup-content">
+                                <div class="popup-top-section">
+                                    <h3 class="popup-title">${closestPoint.title}</h3>
+                                </div>
+    
+                                <div class="popup-desc-section">
+                                    <span class="popup-desc-label">Description</span>
+                                    <p class="popup-desc-text">
+                                        ${closestPoint.desc}
+                                        <a href="#" class="read-more">...Read more</a>
+                                    </p>
+                                </div>
+    
+                                <div class="popup-info-rows">
+                                    <div class="info-row">
+                                        <div class="info-icon-circle">
+                                            ${mapPinIcon}
+                                        </div>
+                                        <div class="info-text">
+                                            <span class="info-subtext">${closestPoint.location.split(',').pop().trim()}</span>
+                                            <span class="info-maintext">${closestPoint.location.split(',')[0]}</span>
+                                        </div>
+                                    </div>
+                                    <div class="info-row">
+                                        <div class="info-icon-circle">
+                                            ${calendarIcon}
+                                        </div>
+                                        <div class="info-text">
+                                            <span class="info-subtext">${closestPoint.date}, 2025</span>
+                                            <span class="info-maintext">${closestPoint.time}</span>
+                                        </div>
+                                    </div>
+                                </div>
+    
+                                <button class="popup-action-btn">
+                                    Buy Ticket GHS ${closestPoint.price}
+                                </button>
+                            </div>
+                        </div>
+                    `;
+
+                    const isMobile = window.innerWidth < 768;
+                    const popupOffset = isMobile ? [0, 10] : [170, 250];
+                    const popupMaxWidth = isMobile ? 300 : 320;
+
+                    L.popup({
+                        offset: popupOffset,
+                        className: 'custom-popup',
+                        maxWidth: popupMaxWidth,
+                        minWidth: isMobile ? 280 : 320,
+                        closeButton: true,
+                        autoPan: true,
+                        autoPanPadding: [50, 50]
+                    })
+                        .setLatLng([closestPoint.lat, closestPoint.lng])
+                        .setContent(popupContent)
+                        .openOn(map);
                 }
             });
+        };
 
-            if (closestPoint && minDistance < 1.0) {
-                const attendeesHTML = `
-                    <div class="popup-attendees">
-                        <div class="attendee-stack">
-                             <img src="https://i.pravatar.cc/150?img=1" class="attendee-avatar">
-                             <img src="https://i.pravatar.cc/150?img=2" class="attendee-avatar">
-                             <img src="https://i.pravatar.cc/150?img=3" class="attendee-avatar">
-                        </div>
-                        <span class="attendee-count">+${Math.floor(Math.random() * 20) + 5} joined</span>
-                    </div>
-                `;
+        initMap();
 
-                // Icons will be static HTML here, or we need to re-run Lucide. Since this is React, using SVG strings or rerun lucide is better.
-                // We will use raw SVG strings for simplicity to avoid Lucide dependency in runtime HTML string.
-                const mapPinIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="info-icon"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`;
-                const calendarIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="info-icon"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>`;
-
-                const popupContent = `
-                    <div class="popup-card">
-                        <img src="${closestPoint.images[0]}" alt="${closestPoint.title}" class="popup-header-image">
-                        <div class="popup-content">
-                            <div class="popup-top-section">
-                                <h3 class="popup-title">${closestPoint.title}</h3>
-                            </div>
-
-                            <div class="popup-desc-section">
-                                <span class="popup-desc-label">Description</span>
-                                <p class="popup-desc-text">
-                                    ${closestPoint.desc}
-                                    <a href="#" class="read-more">...Read more</a>
-                                </p>
-                            </div>
-
-                            <div class="popup-info-rows">
-                                <div class="info-row">
-                                    <div class="info-icon-circle">
-                                        ${mapPinIcon}
-                                    </div>
-                                    <div class="info-text">
-                                        <span class="info-subtext">${closestPoint.location.split(',').pop().trim()}</span>
-                                        <span class="info-maintext">${closestPoint.location.split(',')[0]}</span>
-                                    </div>
-                                </div>
-                                <div class="info-row">
-                                    <div class="info-icon-circle">
-                                        ${calendarIcon}
-                                    </div>
-                                    <div class="info-text">
-                                        <span class="info-subtext">${closestPoint.date}, 2025</span>
-                                        <span class="info-maintext">${closestPoint.time}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <button class="popup-action-btn">
-                                Buy Ticket GHS ${closestPoint.price}
-                            </button>
-                        </div>
-                    </div>
-                `;
-
-                const isMobile = window.innerWidth < 768;
-                const popupOffset = isMobile ? [0, 10] : [170, 250];
-                const popupMaxWidth = isMobile ? 300 : 320;
-
-                L.popup({
-                    offset: popupOffset,
-                    className: 'custom-popup',
-                    maxWidth: popupMaxWidth,
-                    minWidth: isMobile ? 280 : 320,
-                    closeButton: true,
-                    autoPan: true,
-                    autoPanPadding: [50, 50]
-                })
-                    .setLatLng([closestPoint.lat, closestPoint.lng])
-                    .setContent(popupContent)
-                    .openOn(map);
-            }
-        });
-
-        // Cleanup function
         return () => {
             if (mapInstance.current) {
                 mapInstance.current.remove();
                 mapInstance.current = null;
             }
         };
-
     }, []);
 
     return <div id="map" ref={mapRef} style={{ width: '100%', height: '100vh' }}></div>;
