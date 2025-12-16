@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // Mock Data Utilities
 const eventTitles = [
@@ -93,9 +93,77 @@ function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
     return R * c;
 }
 
+// --- Bottom Sheet Component ---
+const BottomSheet = ({ event, onClose }) => {
+    if (!event) return null;
+
+    // Reuse helper to get icons (refactor potential in future, duplication for now OK for speed)
+    const mapPinIcon = <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="info-icon"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>;
+    const calendarIcon = <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="info-icon"><rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /></svg>;
+    const closeIcon = <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>;
+
+    return (
+        <>
+            <div className="bottom-sheet-overlay" onClick={onClose}></div>
+            <div className="bottom-sheet">
+                <div className="bottom-sheet-handle-bar">
+                    <div className="bottom-sheet-handle"></div>
+                </div>
+                <button className="bottom-sheet-close" onClick={onClose}>
+                    {closeIcon}
+                </button>
+
+                {/* Re-using popup card structure but in React JSX */}
+                <div className="popup-card">
+                    <img src={event.images[0]} alt={event.title} className="popup-header-image" />
+                    <div className="popup-content">
+                        <div className="popup-top-section">
+                            <h3 className="popup-title">{event.title}</h3>
+                        </div>
+
+                        <div className="popup-desc-section">
+                            <span className="popup-desc-label">Description</span>
+                            <p className="popup-desc-text">
+                                {event.desc}
+                                <a href="#" className="read-more" style={{ marginLeft: '4px' }}>...Read more</a>
+                            </p>
+                        </div>
+
+                        <div className="popup-info-rows">
+                            <div className="info-row">
+                                <div className="info-icon-circle">
+                                    {mapPinIcon}
+                                </div>
+                                <div className="info-text">
+                                    <span className="info-subtext">{event.location.split(',').pop().trim()}</span>
+                                    <span className="info-maintext">{event.location.split(',')[0]}</span>
+                                </div>
+                            </div>
+                            <div className="info-row">
+                                <div className="info-icon-circle">
+                                    {calendarIcon}
+                                </div>
+                                <div className="info-text">
+                                    <span className="info-subtext">{event.date}, 2025</span>
+                                    <span className="info-maintext">{event.time}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button className="popup-action-btn">
+                            Buy Ticket GHS {event.price}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </>
+    );
+};
+
 export default function StanbicMap() {
     const mapRef = useRef(null);
     const mapInstance = useRef(null);
+    const [selectedEvent, setSelectedEvent] = useState(null);
 
     useEffect(() => {
         if (!mapRef.current) return;
@@ -143,15 +211,31 @@ export default function StanbicMap() {
             // --- Mock Data ---
             const centerLat = 5.6037;
             const centerLng = -0.1870;
-            const osuEvents = generateMockPoints(40, 0.04, centerLat, centerLng);
-            const airportEvents = generateMockPoints(30, 0.03, centerLat, centerLng);
-            const eastLegonEvents = generateMockPoints(30, 0.05, centerLat, centerLng);
 
-            const shiftedAirport = airportEvents.map(p => ({ ...p, lat: p.lat + 0.04, lng: p.lng - 0.01 }));
-            const shiftedLegon = eastLegonEvents.map(p => ({ ...p, lat: p.lat + 0.06, lng: p.lng + 0.03 }));
+            // 1. Stanbic Events (The 5 circled markers)
+            // We'll generate exactly 5 specific high-quality events
+            const stanbicEvents = generateMockPoints(5, 0.05, centerLat, centerLng).map(p => ({
+                ...p,
+                title: "Stanbic " + p.title, // Add branding to be clear
+                desc: `Exclusive event sponsored by Stanbic Bank. ${p.desc}`
+            }));
 
-            const allPoints = [...osuEvents, ...shiftedAirport, ...shiftedLegon];
-            const heatPoints = allPoints.map(p => [p.lat, p.lng, p.intensity]);
+            // 2. General December Events (The Heatmap)
+            // Generate a lot of points to create nice density clouds
+            const generalOsu = generateMockPoints(80, 0.03, centerLat, centerLng);
+            const generalAirport = generateMockPoints(60, 0.04, centerLat + 0.04, centerLng - 0.01);
+            const generalLegon = generateMockPoints(60, 0.05, centerLat + 0.06, centerLng + 0.03);
+
+            const generalEvents = [...generalOsu, ...generalAirport, ...generalLegon];
+
+            // Heatmap uses ALL events (or just general if preferred, but usually heatmap includes everything)
+            // User asked for "blue heat maps still showing as general december events", 
+            // implying general events create the heatmap. We can include stanbic events in heatmap too for completeness.
+            const allHeatmapPoints = [...generalEvents, ...stanbicEvents];
+            const heatPoints = allHeatmapPoints.map(p => [p.lat, p.lng, p.intensity]);
+
+            // Interaction focus: Stanbic Events (markers) + General background (heatmap)
+            // We might only want interactions on the Markers for now as requested.
 
             // Function to initialize layers ensuring map has size
             const initLayers = () => {
@@ -251,74 +335,30 @@ export default function StanbicMap() {
                 }
             };
 
-            initLayers();
+            // --- Markers ---
+            const initMarkers = () => {
+                // ONLY render markers for the 5 Stanbic events
+                stanbicEvents.forEach((point, index) => {
+                    // Alternate colors or random for variety (Blue/Orange)
+                    const borderColor = Math.random() > 0.5 ? '#0637A2' : '#fb923c';
 
-            // --- Interaction Logic ---
-            map.on('click', (e) => {
-                let closestPoint = null;
-                let minDistance = Infinity;
+                    const icon = L.divIcon({
+                        className: 'custom-marker-container',
+                        html: `<img src="${point.images[0]}" class="custom-marker" style="width: 100%; height: 100%; border-radius: 50%; border: 3px solid ${borderColor}; object-fit: cover; background: #fff;" alt="${point.title}">`,
+                        iconSize: [56, 56], // Slightly larger to be more visible
+                        iconAnchor: [28, 28],
+                        popupAnchor: [0, -14]
+                    });
 
-                allPoints.forEach(point => {
-                    const dist = getDistanceFromLatLonInKm(e.latlng.lat, e.latlng.lng, point.lat, point.lng);
-                    if (dist < minDistance) {
-                        minDistance = dist;
-                        closestPoint = point;
-                    }
-                });
+                    const marker = L.marker([point.lat, point.lng], { icon });
 
-                if (closestPoint && minDistance < 1.0) {
-                    const mapPinIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="info-icon"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`;
-                    const calendarIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="info-icon"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>`;
-
-                    const popupContent = `
-                        <div class="popup-card">
-                            <img src="${closestPoint.images[0]}" alt="${closestPoint.title}" class="popup-header-image">
-                            <div class="popup-content">
-                                <div class="popup-top-section">
-                                    <h3 class="popup-title">${closestPoint.title}</h3>
-                                </div>
-    
-                                <div class="popup-desc-section">
-                                    <span class="popup-desc-label">Description</span>
-                                    <p class="popup-desc-text">
-                                        ${closestPoint.desc}
-                                        <a href="#" class="read-more">...Read more</a>
-                                    </p>
-                                </div>
-    
-                                <div class="popup-info-rows">
-                                    <div class="info-row">
-                                        <div class="info-icon-circle">
-                                            ${mapPinIcon}
-                                        </div>
-                                        <div class="info-text">
-                                            <span class="info-subtext">${closestPoint.location.split(',').pop().trim()}</span>
-                                            <span class="info-maintext">${closestPoint.location.split(',')[0]}</span>
-                                        </div>
-                                    </div>
-                                    <div class="info-row">
-                                        <div class="info-icon-circle">
-                                            ${calendarIcon}
-                                        </div>
-                                        <div class="info-text">
-                                            <span class="info-subtext">${closestPoint.date}, 2025</span>
-                                            <span class="info-maintext">${closestPoint.time}</span>
-                                        </div>
-                                    </div>
-                                </div>
-    
-                                <button class="popup-action-btn">
-                                    Buy Ticket GHS ${closestPoint.price}
-                                </button>
-                            </div>
-                        </div>
-                    `;
+                    const popupContent = createPopupContent(point);
 
                     const isMobile = window.innerWidth < 768;
                     const popupOffset = isMobile ? [0, 10] : [170, 250];
                     const popupMaxWidth = isMobile ? 300 : 320;
 
-                    L.popup({
+                    marker.bindPopup(popupContent, {
                         offset: popupOffset,
                         className: 'custom-popup',
                         maxWidth: popupMaxWidth,
@@ -326,12 +366,146 @@ export default function StanbicMap() {
                         closeButton: true,
                         autoPan: true,
                         autoPanPadding: [50, 50]
-                    })
-                        .setLatLng([closestPoint.lat, closestPoint.lng])
-                        .setContent(popupContent)
-                        .openOn(map);
+                    });
+
+                    // Handle Click for Mobile (Bottom Sheet) vs Desktop (Popup)
+                    marker.on('click', (e) => {
+                        const isMobileNow = window.innerWidth < 768;
+                        if (isMobileNow) {
+                            // Stop the popup from opening or close it immediately
+                            // e.target.closePopup(); // This might flicker
+                            // Better: default prevents it? Leaflet popup opens on click.
+                            // If we stop propagation?
+                            // Actually, let's just close it and show ours.
+
+                            // Wait, if I bindPopup, it auto-opens. 
+                            // If I want to prevent it, I should maybe use a custom click handler INSTEAD of bindPopup for mobile?
+                            // But I need to decide at runtime.
+
+                            // Try cancelling the event?
+                            // e.originalEvent.preventDefault();
+                            e.target.closePopup();
+                            setSelectedEvent(point);
+                        } else {
+                            // Desktop: Popup opens automatically via bindPopup.
+                            // Ensure bottom sheet is closed if one was open (unlikely on desktop resize but good practice)
+                            setSelectedEvent(null);
+                        }
+                    });
+
+                    marker.addTo(map);
+                });
+            };
+
+            initLayers();
+            initMarkers();
+
+            // --- Interaction Logic ---
+            // --- Interaction Logic ---
+            // Keep the map click logic as a backup for heatmap interactions
+            map.on('click', (e) => {
+                // If clicking directly on a marker, let the marker handle it (Leaflet does this automatically)
+                // We only want this logic if we clicked "empty" space but are close to a point
+
+                // Small timeout to check if a popup just opened from a marker click
+                setTimeout(() => {
+                    if (map.listens('popupopen')) {
+                        // Check if a popup is currently open? 
+                        // Actually simpler: if we click a marker, this map click fires too? 
+                        // Leaflet map click usually fires if no marker swallowed it.
+                        // But just in case, let's keep it simple.
+                    }
+                }, 0);
+
+                let closestPoint = null;
+                let minDistance = Infinity;
+
+                // Check against ALL points for the click logic (heatmap interaction)
+                const interactivePoints = [...stanbicEvents, ...generalEvents];
+
+                interactivePoints.forEach(point => {
+                    const dist = getDistanceFromLatLonInKm(e.latlng.lat, e.latlng.lng, point.lat, point.lng);
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        closestPoint = point;
+                    }
+                });
+
+                // Only trigger if very close and arguably "missed" the marker
+                if (closestPoint && minDistance < 0.5) {
+                    const isMobileNow = window.innerWidth < 768;
+
+                    if (isMobileNow) {
+                        setSelectedEvent(closestPoint);
+                    } else {
+                        // Desktop: Standard popup
+                        const popupContent = createPopupContent(closestPoint);
+                        // Desktop offset
+                        const popupOffset = [170, 250];
+
+                        L.popup({
+                            offset: popupOffset,
+                            className: 'custom-popup',
+                            maxWidth: 320,
+                            minWidth: 320,
+                            closeButton: true,
+                            autoPan: true
+                        })
+                            .setLatLng([closestPoint.lat, closestPoint.lng])
+                            .setContent(popupContent)
+                            .openOn(map);
+                    }
                 }
             });
+        };
+
+        const createPopupContent = (closestPoint) => {
+            const mapPinIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="info-icon"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`;
+            const calendarIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="info-icon"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>`;
+
+            return `
+                <div class="popup-card">
+                    <img src="${closestPoint.images[0]}" alt="${closestPoint.title}" class="popup-header-image">
+                    <div class="popup-content">
+                        <div class="popup-top-section">
+                            <h3 class="popup-title">${closestPoint.title}</h3>
+                        </div>
+
+                        <div class="popup-desc-section">
+                            <span class="popup-desc-label">Description</span>
+                            <p class="popup-desc-text">
+                                ${closestPoint.desc}
+                                <a href="#" class="read-more">...Read more</a>
+                            </p>
+                        </div>
+
+                        <div class="popup-info-rows">
+                            <div class="info-row">
+                                <div class="info-icon-circle">
+                                    ${mapPinIcon}
+                                </div>
+                                <div class="info-text">
+                                    <span class="info-subtext">${closestPoint.location.split(',').pop().trim()}</span>
+                                    <span class="info-maintext">${closestPoint.location.split(',')[0]}</span>
+                                </div>
+                            </div>
+                            <div class="info-row">
+                                <div class="info-icon-circle">
+                                    ${calendarIcon}
+                                </div>
+                                <div class="info-text">
+                                    <span class="info-subtext">${closestPoint.date}, 2025</span>
+                                    <span class="info-maintext">${closestPoint.time}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button class="popup-action-btn">
+                            Buy Ticket GHS ${closestPoint.price}
+                        </button>
+                    </div>
+                </div>
+            `;
         };
 
         initMap();
@@ -344,5 +518,10 @@ export default function StanbicMap() {
         };
     }, []);
 
-    return <div id="map" ref={mapRef} style={{ width: '100%', height: '100vh' }}></div>;
+    return (
+        <>
+            <div id="map" ref={mapRef} style={{ width: '100%', height: '100vh' }}></div>
+            {selectedEvent && <BottomSheet event={selectedEvent} onClose={() => setSelectedEvent(null)} />}
+        </>
+    );
 }
