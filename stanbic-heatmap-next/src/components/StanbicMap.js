@@ -80,13 +80,108 @@ function generateMockPoints(count, spread, centerLat, centerLng) {
     return points;
 }
 
+// --- Shared Icon SVGs ---
+const ICONS = {
+    mapPin: {
+        jsx: <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="info-icon"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>,
+        html: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="info-icon"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`
+    },
+    calendar: {
+        jsx: <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="info-icon"><rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /></svg>,
+        html: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="info-icon"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>`
+    },
+    close: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+};
+
+// --- Event Card Component (Reusable) ---
+const EventCard = ({ event, isJSX = true }) => {
+    const content = {
+        image: event.images[0],
+        title: event.title,
+        desc: event.desc,
+        locationCity: event.location.split(',').pop().trim(),
+        locationVenue: event.location.split(',')[0],
+        date: event.date,
+        time: event.time,
+        price: event.price
+    };
+
+    if (isJSX) {
+        return (
+            <div className="popup-card">
+                <img src={content.image} alt={content.title} className="popup-header-image" />
+                <div className="popup-content">
+                    <div className="popup-top-section">
+                        <h3 className="popup-title">{content.title}</h3>
+                    </div>
+                    <div className="popup-desc-section">
+                        <span className="popup-desc-label">Description</span>
+                        <p className="popup-desc-text">
+                            {content.desc}
+                            <a href="#" className="read-more" style={{ marginLeft: '4px' }}>...Read more</a>
+                        </p>
+                    </div>
+                    <div className="popup-info-rows">
+                        <div className="info-row">
+                            <div className="info-icon-circle">{ICONS.mapPin.jsx}</div>
+                            <div className="info-text">
+                                <span className="info-subtext">{content.locationCity}</span>
+                                <span className="info-maintext">{content.locationVenue}</span>
+                            </div>
+                        </div>
+                        <div className="info-row">
+                            <div className="info-icon-circle">{ICONS.calendar.jsx}</div>
+                            <div className="info-text">
+                                <span className="info-subtext">{content.date}, 2025</span>
+                                <span className="info-maintext">{content.time}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button className="popup-action-btn">Buy Ticket GHS {content.price}</button>
+                </div>
+            </div>
+        );
+    }
+
+    return `
+        <div class="popup-card">
+            <img src="${content.image}" alt="${content.title}" class="popup-header-image">
+            <div class="popup-content">
+                <div class="popup-top-section">
+                    <h3 class="popup-title">${content.title}</h3>
+                </div>
+                <div class="popup-desc-section">
+                    <span class="popup-desc-label">Description</span>
+                    <p class="popup-desc-text">
+                        ${content.desc}
+                        <a href="#" class="read-more">...Read more</a>
+                    </p>
+                </div>
+                <div class="popup-info-rows">
+                    <div class="info-row">
+                        <div class="info-icon-circle">${ICONS.mapPin.html}</div>
+                        <div class="info-text">
+                            <span class="info-subtext">${content.locationCity}</span>
+                            <span class="info-maintext">${content.locationVenue}</span>
+                        </div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-icon-circle">${ICONS.calendar.html}</div>
+                        <div class="info-text">
+                            <span class="info-subtext">${content.date}, 2025</span>
+                            <span class="info-maintext">${content.time}</span>
+                        </div>
+                    </div>
+                </div>
+                <button class="popup-action-btn">Buy Ticket GHS ${content.price}</button>
+            </div>
+        </div>
+    `;
+};
+
 // --- Bottom Sheet Component ---
 const BottomSheet = ({ event, onClose }) => {
     if (!event) return null;
-
-    const mapPinIcon = <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="info-icon"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>;
-    const calendarIcon = <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="info-icon"><rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /></svg>;
-    const closeIcon = <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>;
 
     return (
         <>
@@ -96,104 +191,16 @@ const BottomSheet = ({ event, onClose }) => {
                     <div className="bottom-sheet-handle"></div>
                 </div>
                 <button className="bottom-sheet-close" onClick={onClose}>
-                    {closeIcon}
+                    {ICONS.close}
                 </button>
-
-                <div className="popup-card">
-                    <img src={event.images[0]} alt={event.title} className="popup-header-image" />
-                    <div className="popup-content">
-                        <div className="popup-top-section">
-                            <h3 className="popup-title">{event.title}</h3>
-                        </div>
-
-                        <div className="popup-desc-section">
-                            <span className="popup-desc-label">Description</span>
-                            <p className="popup-desc-text">
-                                {event.desc}
-                                <a href="#" className="read-more" style={{ marginLeft: '4px' }}>...Read more</a>
-                            </p>
-                        </div>
-
-                        <div className="popup-info-rows">
-                            <div className="info-row">
-                                <div className="info-icon-circle">
-                                    {mapPinIcon}
-                                </div>
-                                <div className="info-text">
-                                    <span className="info-subtext">{event.location.split(',').pop().trim()}</span>
-                                    <span className="info-maintext">{event.location.split(',')[0]}</span>
-                                </div>
-                            </div>
-                            <div className="info-row">
-                                <div className="info-icon-circle">
-                                    {calendarIcon}
-                                </div>
-                                <div className="info-text">
-                                    <span className="info-subtext">{event.date}, 2025</span>
-                                    <span className="info-maintext">{event.time}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <button className="popup-action-btn">
-                            Buy Ticket GHS {event.price}
-                        </button>
-                    </div>
-                </div>
+                <EventCard event={event} isJSX={true} />
             </div>
         </>
     );
 };
 
-// --- Popup Component for HTML string ---
-const createPopupContent = (point) => {
-    const mapPinIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="info-icon"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`;
-    const calendarIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="info-icon"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>`;
-
-    return `
-        <div class="popup-card">
-            <img src="${point.images[0]}" alt="${point.title}" class="popup-header-image">
-            <div class="popup-content">
-                <div class="popup-top-section">
-                    <h3 class="popup-title">${point.title}</h3>
-                </div>
-
-                <div class="popup-desc-section">
-                    <span class="popup-desc-label">Description</span>
-                    <p class="popup-desc-text">
-                        ${point.desc}
-                        <a href="#" class="read-more">...Read more</a>
-                    </p>
-                </div>
-
-                <div class="popup-info-rows">
-                    <div class="info-row">
-                        <div class="info-icon-circle">
-                            ${mapPinIcon}
-                        </div>
-                        <div class="info-text">
-                            <span class="info-subtext">${point.location.split(',').pop().trim()}</span>
-                            <span class="info-maintext">${point.location.split(',')[0]}</span>
-                        </div>
-                    </div>
-                    <div class="info-row">
-                        <div class="info-icon-circle">
-                            ${calendarIcon}
-                        </div>
-                        <div class="info-text">
-                            <span class="info-subtext">${point.date}, 2025</span>
-                            <span class="info-maintext">${point.time}</span>
-                        </div>
-                    </div>
-                </div>
-
-                <button class="popup-action-btn">
-                    Buy Ticket GHS ${point.price}
-                </button>
-            </div>
-        </div>
-    `;
-};
+// --- Popup Content for Mapbox (HTML string) ---
+const createPopupContent = (point) => EventCard({ event: point, isJSX: false });
 
 export default function StanbicMap() {
     const mapContainerRef = useRef(null);
