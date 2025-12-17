@@ -316,6 +316,15 @@ export default function StanbicMap() {
 
             // Wait for map to load before adding layers
             map.on('load', () => {
+                // Hide all default labels and icons
+                const layers = map.getStyle().layers;
+                layers.forEach((layer) => {
+                    // Hide all text/symbol layers (street names, POI labels, etc.)
+                    if (layer.type === 'symbol' && layer.id !== 'custom-event-marker') {
+                        map.setLayoutProperty(layer.id, 'visibility', 'none');
+                    }
+                });
+
                 setupLayers(mapboxgl, map);
             });
         };
@@ -538,6 +547,93 @@ export default function StanbicMap() {
 
                 markersRef.current.push(marker);
             });
+
+            // Add restaurant markers near each Stanbic event
+            const addRestaurantMarkers = async () => {
+                for (const event of stanbicEvents) {
+                    try {
+                        // Fetch restaurants near this event
+                        const response = await fetch(`/api/restaurants?lat=${event.lat}&lng=${event.lng}&radius=1000`);
+                        const data = await response.json();
+
+                        if (data.success && data.restaurants) {
+                            data.restaurants.forEach(restaurant => {
+                                // Create fork and knife icon using SVG
+                                const restaurantIcon = document.createElement('div');
+                                restaurantIcon.className = 'restaurant-marker';
+                                restaurantIcon.innerHTML = `
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <circle cx="12" cy="12" r="11" fill="#FF6B6B" stroke="white" stroke-width="2"/>
+                                        <g transform="translate(6, 6)">
+                                            <path d="M3 2V12" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+                                            <path d="M3 2C3 3.5 4 4 5 4" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+                                            <path d="M3 2C3 3.5 2 4 1 4" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+                                            <path d="M9 2V5C9 6 9.5 7 11 7V12" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+                                            <path d="M9 2V5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+                                        </g>
+                                    </svg>
+                                `;
+                                restaurantIcon.style.cursor = 'pointer';
+                                restaurantIcon.style.transition = 'transform 0.2s';
+
+                                // Hover effect
+                                restaurantIcon.addEventListener('mouseenter', () => {
+                                    restaurantIcon.style.transform = 'scale(1.2)';
+                                });
+                                restaurantIcon.addEventListener('mouseleave', () => {
+                                    restaurantIcon.style.transform = 'scale(1)';
+                                });
+
+                                // Create popup content with images (Snapchat style)
+                                const popupContent = `
+                                    <div class="restaurant-popup">
+                                        <div class="restaurant-images">
+                                            <img src="${restaurant.images[0]}" alt="${restaurant.name}" style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px 8px 0 0;">
+                                        </div>
+                                        <div style="padding: 12px;">
+                                            <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600;">${restaurant.name}</h3>
+                                            <p style="margin: 0; font-size: 12px; color: #666; margin-bottom: 8px;">${restaurant.category}</p>
+                                            <p style="margin: 0; font-size: 11px; color: #999;">${restaurant.address}</p>
+                                            <div style="display: flex; gap: 4px; margin-top: 8px; overflow-x: auto;">
+                                                ${restaurant.images.slice(1).map(img => `
+                                                    <img src="${img}" alt="${restaurant.name}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 4px; flex-shrink: 0;">
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+
+                                const restaurantPopup = new mapboxgl.Popup({
+                                    offset: 20,
+                                    className: 'restaurant-custom-popup',
+                                    maxWidth: '280px',
+                                    closeButton: true
+                                }).setHTML(popupContent);
+
+                                const restaurantMarker = new mapboxgl.Marker({
+                                    element: restaurantIcon,
+                                    anchor: 'center'
+                                })
+                                    .setLngLat([restaurant.coordinates.lng, restaurant.coordinates.lat])
+                                    .setPopup(restaurantPopup)
+                                    .addTo(map);
+
+                                // Click to show popup
+                                restaurantIcon.addEventListener('click', () => {
+                                    restaurantPopup.addTo(map);
+                                });
+
+                                markersRef.current.push(restaurantMarker);
+                            });
+                        }
+                    } catch (error) {
+                        console.error('Error loading restaurants:', error);
+                    }
+                }
+            };
+
+            // Load restaurants after map is ready
+            addRestaurantMarkers();
 
             // Map click for heatmap interaction
             map.on('click', (e) => {
