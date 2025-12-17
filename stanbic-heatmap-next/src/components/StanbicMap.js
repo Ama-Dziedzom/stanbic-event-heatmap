@@ -202,16 +202,88 @@ const BottomSheet = ({ event, onClose }) => {
 // --- Popup Content for Mapbox (HTML string) ---
 const createPopupContent = (point) => EventCard({ event: point, isJSX: false });
 
+// --- Generate Mock Data (Fallback when Airtable is not configured) ---
+function generateMockData() {
+    const centerLat = 5.6037;
+    const centerLng = -0.1870;
+
+    // Stanbic Events (5 Key Anchors)
+    const stanbicEvents = [
+        { lat: 5.6037, lng: -0.1870, title: 'Jazz in the Park', desc: 'A smooth evening of jazz.', location: 'Movenpick, Accra' },
+        { lat: 5.6100, lng: -0.1990, title: 'Art & Wine', desc: 'Wine tasting and gallery walk.', location: 'Alliance Francaise, Accra' },
+        { lat: 5.5900, lng: -0.1800, title: 'Tech Summit', desc: 'Future of fintech in Africa.', location: 'Kempinski Hotel, Accra' },
+        { lat: 5.6250, lng: -0.1700, title: 'Blue Gala', desc: 'Annual exclusive banking gala.', location: 'Labadi Beach Hotel, Accra' },
+        { lat: 5.5800, lng: -0.2100, title: 'Golf Championship', desc: 'Pro-am golf tournament.', location: 'Achimota Golf Club, Accra' }
+    ].map(p => ({
+        ...p,
+        id: Math.random().toString(),
+        price: Math.floor(Math.random() * 500) + 100,
+        desc: `Exclusive event sponsored by Stanbic Bank. ${p.desc}`,
+        intensity: 1.0,
+        date: getRandomFutureDate(),
+        time: getRandomTime(),
+        images: [`https://picsum.photos/seed/${p.title.replace(/\s/g, '')}/400/300`],
+        expectations: ['Networking', 'Entertainment', 'Premium experience']
+    }));
+
+    // General Events (Curated Clusters)
+    const generalCluster1 = generateMockPoints(8, 0.015, 5.5600, -0.2000);
+    const generalCluster2 = generateMockPoints(6, 0.012, 5.6400, -0.1600);
+    const generalCluster3 = generateMockPoints(5, 0.010, 5.6000, -0.1650);
+    const generalEvents = [...generalCluster1, ...generalCluster2, ...generalCluster3];
+
+    return {
+        success: true,
+        stanbicEvents,
+        generalEvents,
+        total: stanbicEvents.length + generalEvents.length,
+        lastUpdated: new Date().toISOString()
+    };
+}
+
 export default function StanbicMap() {
     const mapContainerRef = useRef(null);
     const mapInstance = useRef(null);
     const markersRef = useRef([]);
     const isMouseOverMarkerRef = useRef(false); // Hover lock
     const [selectedEvent, setSelectedEvent] = useState(null);
+    const [eventsData, setEventsData] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    // Fetch events from Airtable API
+    useEffect(() => {
+        const fetchEvents = async () => {
+            try {
+                setIsLoading(true);
+                const response = await fetch('/api/events');
+                const data = await response.json();
+
+                if (data.success) {
+                    setEventsData(data);
+                    setError(null);
+                } else {
+                    // If API is not configured, fall back to mock data
+                    console.warn('Airtable not configured, using mock data');
+                    setEventsData(generateMockData());
+                    setError(null);
+                }
+            } catch (err) {
+                console.error('Error fetching events:', err);
+                setError('Failed to load events. Using mock data.');
+                setEventsData(generateMockData());
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchEvents();
+    }, []);
 
     useEffect(() => {
         if (!mapContainerRef.current) return;
         if (mapInstance.current) return;
+        if (!eventsData) return; // Wait for events data to load
 
         const initMap = async () => {
             // Wait for container to have dimensions
@@ -233,7 +305,7 @@ export default function StanbicMap() {
             // Initialize Map
             const map = new mapboxgl.Map({
                 container: mapContainerRef.current,
-                style: 'mapbox://styles/dzie4bar/cmj8qbohf002s01s94w0j9mbl', // Light style similar to Carto
+                style: 'mapbox://styles/dzie4bar/cmj8qbohf002s01s94w0j9mbl', // Default Mapbox light style
                 center: [-0.1870, 5.6037], // [lng, lat] - Accra
                 zoom: 12,
                 pitch: 45, // Tilt for 3D effect
@@ -249,38 +321,9 @@ export default function StanbicMap() {
         };
 
         const setupLayers = (mapboxgl, map) => {
-            // --- Mock Data ---
-            const centerLat = 5.6037;
-            const centerLng = -0.1870;
-
-            // 1. Stanbic Events (5 Key Anchors - Main Attractions)
-            // We place them in a known "nice" arc for demo purposes
-            const stanbicEvents = [
-                { lat: 5.6037, lng: -0.1870, title: 'Jazz in the Park', desc: 'A smooth evening of jazz.', location: 'Movenpick, Accra' },
-                { lat: 5.6100, lng: -0.1990, title: 'Art & Wine', desc: 'Wine tasting and gallery walk.', location: 'Alliance Francaise, Accra' },
-                { lat: 5.5900, lng: -0.1800, title: 'Tech Summit', desc: 'Future of fintech in Africa.', location: 'Kempinski Hotel, Accra' },
-                { lat: 5.6250, lng: -0.1700, title: 'Blue Gala', desc: 'Annual exclusive banking gala.', location: 'Labadi Beach Hotel, Accra' },
-                { lat: 5.5800, lng: -0.2100, title: 'Golf Championship', desc: 'Pro-am golf tournament.', location: 'Achimota Golf Club, Accra' }
-            ].map(p => ({
-                ...p,
-                id: Math.random().toString(),
-                price: Math.floor(Math.random() * 500) + 100,
-                desc: `Exclusive event sponsored by Stanbic Bank. ${p.desc}`,
-                intensity: 1.0,
-                // Use a placeholder image generator that looks professional
-                images: [`https://picsum.photos/seed/${p.title.replace(/\s/g, '')}/400/300`]
-            }));
-
-
-            // 2. General Events (Curated "Designed" Clusters)
-            // Instead of random noise, we create 3 distinct "Hotspots" of general activity.
-            // This mirrors real life: usually Osu, Airport, and East Legon are hot.
-
-            const generalCluster1 = generateMockPoints(8, 0.015, 5.5600, -0.2000); // Osu/Cantonments (Nightlife)
-            const generalCluster2 = generateMockPoints(6, 0.012, 5.6400, -0.1600); // East Legon (Restaurants)
-            const generalCluster3 = generateMockPoints(5, 0.010, 5.6000, -0.1650); // Airport City (Business)
-
-            const generalEvents = [...generalCluster1, ...generalCluster2, ...generalCluster3];
+            // Use events data from Airtable (or mock data fallback)
+            const stanbicEvents = eventsData.stanbicEvents;
+            const generalEvents = eventsData.generalEvents;
 
             // Prepare GeoJSONs
             const stanbicGeoJSON = {
@@ -594,10 +637,57 @@ export default function StanbicMap() {
                 mapInstance.current = null;
             }
         };
-    }, []);
+    }, [eventsData]); // Re-initialize map when events data changes
 
     return (
         <>
+            {isLoading && (
+                <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100vh',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'linear-gradient(135deg, #0637A2 0%, #1e3a8a 100%)',
+                    zIndex: 9999,
+                    color: 'white',
+                    fontFamily: 'system-ui, -apple-system, sans-serif'
+                }}>
+                    <div style={{ textAlign: 'center' }}>
+                        <div style={{
+                            width: '50px',
+                            height: '50px',
+                            border: '4px solid rgba(255,255,255,0.3)',
+                            borderTop: '4px solid white',
+                            borderRadius: '50%',
+                            animation: 'spin 1s linear infinite',
+                            margin: '0 auto 20px'
+                        }} />
+                        <p style={{ fontSize: '18px', fontWeight: '500' }}>Loading Events...</p>
+                    </div>
+                </div>
+            )}
+            {error && (
+                <div style={{
+                    position: 'absolute',
+                    top: '20px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: 'rgba(251, 146, 60, 0.95)',
+                    color: 'white',
+                    padding: '12px 24px',
+                    borderRadius: '8px',
+                    zIndex: 1000,
+                    fontSize: '14px',
+                    maxWidth: '90%',
+                    textAlign: 'center'
+                }}>
+                    {error}
+                </div>
+            )}
             <div id="map" ref={mapContainerRef} style={{ width: '100%', height: '100vh' }}></div>
             {selectedEvent && <BottomSheet event={selectedEvent} onClose={() => setSelectedEvent(null)} />}
         </>
