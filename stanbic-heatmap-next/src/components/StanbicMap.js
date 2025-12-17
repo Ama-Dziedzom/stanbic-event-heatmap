@@ -239,7 +239,7 @@ export default function StanbicMap() {
             map.on('load', () => {
                 setupLayers(mapboxgl, map);
             });
-        };
+        }; ++++++++++++++++++
 
         const setupLayers = (mapboxgl, map) => {
             // --- Mock Data ---
@@ -404,10 +404,20 @@ export default function StanbicMap() {
             stanbicEvents.forEach((point) => {
                 const borderColor = Math.random() > 0.5 ? '#0637A2' : '#fb923c';
 
-                // Create custom marker element
-                const markerEl = document.createElement('div');
-                markerEl.className = 'mapbox-custom-marker';
-                markerEl.style.cssText = `
+                // 1. Create Container (Mapbox manages position of this)
+                const markerContainer = document.createElement('div');
+                markerContainer.className = 'mapbox-marker-container';
+                markerContainer.style.width = '60px'; // Slightly larger to hold scaled inner
+                markerContainer.style.height = '60px';
+                markerContainer.style.display = 'flex';
+                markerContainer.style.alignItems = 'center';
+                markerContainer.style.justifyContent = 'center';
+                markerContainer.style.cursor = 'pointer';
+
+                // 2. Create Inner Element (We animate this)
+                const innerEl = document.createElement('div');
+                innerEl.className = 'marker-inner';
+                innerEl.style.cssText = `
                     width: 56px;
                     height: 56px;
                     border-radius: 50%;
@@ -416,63 +426,61 @@ export default function StanbicMap() {
                     background-size: cover;
                     background-position: center;
                     background-color: #fff;
-                    cursor: pointer;
                     box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-                    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+                    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), border-color 0.2s ease;
                 `;
 
-                markerEl.addEventListener('mouseenter', () => {
-                    markerEl.style.transform = 'scale(1.15)';
-                    markerEl.style.borderColor = '#fb923c';
+                markerContainer.appendChild(innerEl);
+
+                // HOVER LISTENERS (Apply to Inner)
+                markerContainer.addEventListener('mouseenter', () => {
+                    innerEl.style.transform = 'scale(1.15)';
+                    innerEl.style.borderColor = '#fb923c';
                     isMouseOverMarkerRef.current = true;
                 });
 
-                markerEl.addEventListener('mouseleave', () => {
-                    markerEl.style.transform = 'scale(1)';
-                    markerEl.style.borderColor = borderColor;
+                markerContainer.addEventListener('mouseleave', () => {
+                    innerEl.style.transform = 'scale(1)';
+                    innerEl.style.borderColor = borderColor;
                     isMouseOverMarkerRef.current = false;
                 });
 
                 // Create popup
                 const popup = new mapboxgl.Popup({
-                    offset: 30,
+                    offset: 35, // Adjust for new size
                     className: 'mapbox-custom-popup',
                     maxWidth: '320px',
                     closeButton: true,
                     closeOnClick: true
                 }).setHTML(createPopupContent(point));
 
-                // Create marker
+                // Create marker using Container
                 const marker = new mapboxgl.Marker({
-                    element: markerEl,
+                    element: markerContainer,
                     anchor: 'center'
                 })
                     .setLngLat([point.lng, point.lat])
                     .addTo(map);
 
-                // Handle click for mobile (bottom sheet) vs desktop (popup)
-                markerEl.addEventListener('click', (e) => {
+                // CLICK LISTENER
+                markerContainer.addEventListener('click', (e) => {
                     e.stopPropagation();
 
                     const isMobile = window.innerWidth < 768;
-                    const targetZoom = Math.max(map.getZoom(), 16); // Zoom in if not already close
+                    const targetZoom = Math.max(map.getZoom(), 16);
 
-                    // Snapchat-style FlyTo animation
                     map.flyTo({
                         center: [point.lng, point.lat],
                         zoom: targetZoom,
-                        speed: 1.2, // Smooth speed
-                        curve: 1.42, // Cinematic arc
+                        speed: 1.2,
+                        curve: 1.42,
                         easing: (t) => t,
-                        padding: isMobile ? { bottom: 300 } : { left: 0 } // Offset for Bottom Sheet
+                        padding: isMobile ? { bottom: 300 } : { left: 0 }
                     });
 
                     if (isMobile) {
                         setSelectedEvent(point);
                     } else {
-                        // For desktop, we wait a tiny bit for the flyTo to start before opening popup
-                        // or just open it. Mapbox popups track the marker, so it moves with the map!
-                        // Disable autoPan to avoid fighting with FlyTo
                         popup.options.autoPan = false;
                         popup.setLngLat([point.lng, point.lat]).addTo(map);
                     }
