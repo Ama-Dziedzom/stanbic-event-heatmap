@@ -239,7 +239,7 @@ export default function StanbicMap() {
             map.on('load', () => {
                 setupLayers(mapboxgl, map);
             });
-        }; ++++++++++++++++++
+        };
 
         const setupLayers = (mapboxgl, map) => {
             // --- Mock Data ---
